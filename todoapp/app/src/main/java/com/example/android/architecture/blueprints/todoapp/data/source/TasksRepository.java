@@ -16,6 +16,8 @@
 
 package com.example.android.architecture.blueprints.todoapp.data.source;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 
@@ -29,8 +31,6 @@ import java.util.Map;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-
-import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Concrete implementation to load tasks from the data sources into a cache.
@@ -111,7 +111,8 @@ public class TasksRepository implements TasksDataSource {
             mTasksLocalDataSource.getTasks(new LoadTasksCallback() {
                 @Override
                 public void onTasksLoaded(List<Task> tasks) {
-                    processLoadedTasks(tasks, callback);
+                    refreshCache(tasks);
+                    callback.onTasksLoaded(new ArrayList<>(mCachedTasks.values()));
                 }
 
                 @Override
@@ -269,7 +270,9 @@ public class TasksRepository implements TasksDataSource {
         mTasksRemoteDataSource.getTasks(new LoadTasksCallback() {
             @Override
             public void onTasksLoaded(List<Task> tasks) {
-                processLoadedTasks(tasks, callback);
+                refreshCache(tasks);
+                refreshLocalDataSource(tasks);
+                callback.onTasksLoaded(new ArrayList<>(mCachedTasks.values()));
             }
 
             @Override
@@ -279,7 +282,7 @@ public class TasksRepository implements TasksDataSource {
         });
     }
 
-    private void processLoadedTasks(List<Task> tasks, final LoadTasksCallback callback) {
+    private void refreshCache(List<Task> tasks) {
         if (mCachedTasks == null) {
             mCachedTasks = new LinkedHashMap<>();
         }
@@ -287,8 +290,14 @@ public class TasksRepository implements TasksDataSource {
         for (Task task : tasks) {
             mCachedTasks.put(task.getId(), task);
         }
-        callback.onTasksLoaded(new ArrayList<>(mCachedTasks.values()));
         mCacheIsDirty = false;
+    }
+
+    private void refreshLocalDataSource(List<Task> tasks) {
+        mTasksLocalDataSource.deleteAllTasks();
+        for (Task task : tasks) {
+            mTasksLocalDataSource.saveTask(task);
+        }
     }
 
     @Nullable
